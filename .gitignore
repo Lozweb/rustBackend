@@ -1,0 +1,5 @@
+/target
+.env
+/deploy/.env
+/data
+.idea

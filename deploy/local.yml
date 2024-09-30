@@ -1,0 +1,14 @@
+version: "3"
+services:
+
+  postgres:
+    image: "postgres:16"
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: rust
+      POSTGRES_USER: rust
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - "../data/postgres:/var/lib/postgresql/data"
+    restart: unless-stopped

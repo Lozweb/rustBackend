@@ -1,15 +1,20 @@
+use std::net::SocketAddr;
+
 use anyhow::Result;
 use axum::http::Method;
 use axum::{http, Extension, Router};
 use dotenvy::dotenv;
-use rustBackend::db::init_db;
-use rustBackend::error::handle_error;
-use rustBackend::user::user_router;
-use std::net::SocketAddr;
+use moka::sync::Cache;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace;
 use tower_http::trace::TraceLayer;
 use tracing::Level;
+
+use rustBackend::config::Config;
+use rustBackend::db::init_db;
+use rustBackend::error::handle_error;
+use rustBackend::user::model::UserPendingQueryCache;
+use rustBackend::user::user_router;
 
 #[tokio::main]
 async fn main() {
@@ -34,9 +39,10 @@ fn configure_logger() {
 
 async fn try_main() -> Result<()> {
     dotenv().ok();
-
-    
+    let config = Config::load();
     let db = init_db().await?;
+
+    let cache: UserPendingQueryCache = Cache::new(1000);
 
     let trace_layer = TraceLayer::new_for_http()
         .make_span_with(trace::DefaultMakeSpan::new().level(Level::INFO))
@@ -50,12 +56,14 @@ async fn try_main() -> Result<()> {
             http::header::CONTENT_LENGTH,
         ])
         .allow_origin(Any);
-
+    
     let app = Router::new()
         .merge(user_router())
         .layer(trace_layer)
         .layer(cors)
-        .layer(Extension(db));
+        .layer(Extension(db))
+        .layer(Extension(cache))
+        .layer(Extension(config));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     tracing::info!("Listening on {}", addr);

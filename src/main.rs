@@ -56,7 +56,7 @@ async fn try_main() -> Result<()> {
             http::header::CONTENT_LENGTH,
         ])
         .allow_origin(Any);
-    
+
     let app = Router::new()
         .merge(user_router())
         .layer(trace_layer)

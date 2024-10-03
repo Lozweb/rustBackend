@@ -25,7 +25,7 @@ pub async fn send_invitation_mail(config: &Config, email: &str, token: &str) -> 
             <a href="https://localhost:3000/confirm/{token}">Valider mon adresse email</a><br><br>
         "#
     );
-
+    println!("mail token = {}", token);
     send_mail(config, "aelozweb@gmail.com", email, "Bienvenue", &body).await?;
     Ok(())
 }

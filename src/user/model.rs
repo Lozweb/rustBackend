@@ -1,6 +1,7 @@
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use moka::sync::Cache;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 pub type UserPendingQueryCache = Cache<String, PendingQuery>;
 
@@ -18,7 +19,20 @@ pub struct RegisterQuery {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct AuthResponse {
+    pub token: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct EmailToken {
+    pub email: String,
+    pub exp: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Claims {
+    pub id: Uuid,
+    pub username: String,
     pub email: String,
     pub exp: i64,
 }

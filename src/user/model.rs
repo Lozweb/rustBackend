@@ -1,6 +1,7 @@
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use moka::sync::Cache;
 use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
 use uuid::Uuid;
 
 pub type UserPendingQueryCache = Cache<String, PendingQuery>;
@@ -13,6 +14,20 @@ pub enum PendingQuery {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct RegisterQuery {
+    pub username: String,
+    pub email: String,
+    pub password: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Credentials {
+    pub username_or_email: String,
+    pub password: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct User {
+    pub id: Option<Uuid>,
     pub username: String,
     pub email: String,
     pub password: String,

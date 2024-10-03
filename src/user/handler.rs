@@ -1,15 +1,38 @@
-use crate::config::Config;
-use crate::db::new_uuid;
-use crate::error::{AppError, Result};
-use crate::user::mail::send_invitation_mail;
-use crate::user::model::{AuthResponse, EmailToken, PendingQuery, RegisterQuery, UserPendingQueryCache};
-use crate::user::service::{generate_email_token, generate_token, hash_password};
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::SaltString;
 use axum::extract::Path;
 use axum::{Extension, Json};
 use jsonwebtoken::{decode, Validation};
-use sqlx::{query, PgPool};
+use sqlx::{query, query_as, PgPool};
+
+use crate::config::Config;
+use crate::db::new_uuid;
+use crate::error::{AppError, Result};
+use crate::user::mail::send_invitation_mail;
+use crate::user::model::{AuthResponse, Credentials, EmailToken, PendingQuery, RegisterQuery, User, UserPendingQueryCache};
+use crate::user::service::{generate_email_token, generate_token, hash_password, verify_password};
+
+pub async fn login(
+    Extension(db): Extension<PgPool>,
+    Extension(config): Extension<Config>,
+    Json(credentials): Json<Credentials>,
+) -> Result<Json<AuthResponse>> {
+    query_as!(
+        User,
+        r#"SELECT * FROM "user" WHERE username = $1 OR email = $1"#,
+        credentials.username_or_email.trim().to_ascii_lowercase()
+    )
+        .fetch_optional(&db)
+        .await?
+        .ok_or_else(|| AppError::Unauthorized)
+        .and_then(|u| verify_password(u, &credentials.password))
+        .and_then(|u| {
+            let id = u.id.expect("User id is missing");
+            let username = u.username;
+            generate_token(&config, id, username, u.email)
+        })
+        .map(|token| Json(AuthResponse { token }))
+}
 
 pub async fn register(
     Extension(db): Extension<PgPool>,

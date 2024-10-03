@@ -1,9 +1,9 @@
 use crate::config::Config;
 use crate::error::{AppError, Result};
-use crate::user::model::{Claims, EmailToken};
+use crate::user::model::{Claims, EmailToken, User};
 use anyhow::Error;
 use argon2::password_hash::SaltString;
-use argon2::{Argon2, PasswordHash, PasswordHasher};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use jsonwebtoken::{encode, Header};
 use uuid::Uuid;
 
@@ -36,6 +36,14 @@ pub fn hash_password<'a>(password: &str, salt: &'a SaltString) -> Result<Passwor
     Argon2::default()
         .hash_password(password.as_bytes(), salt)
         .map_err(|e| AppError::Unexpected(Error::msg(format!("Failed to hash password : {e}"))))
+}
+
+pub fn verify_password(user: User, password: &str) -> Result<User> {
+    let hash = PasswordHash::new(&user.password).map_err(|_| AppError::Unauthorized)?;
+    Argon2::default()
+        .verify_password(password.as_bytes(), &hash)
+        .map_err(|_| AppError::Unauthorized)
+        .map(|_| user)
 }
 
 fn get_timestamp_2_hours_from_now() -> i64 {

@@ -19,6 +19,18 @@ pub struct RegisterQuery {
     pub password: String,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub enum ResetQuery {
+    Ask { email: String },
+    Reset { token: String, password: String },
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub enum ResetResponse {
+    EmailSent,
+    Changed { token: String },
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Credentials {
     pub username_or_email: String,
@@ -50,6 +62,13 @@ pub struct Claims {
     pub username: String,
     pub email: String,
     pub exp: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct AuthUser {
+    pub id: Uuid,
+    pub username: String,
+    pub email: String,
 }
 
 #[derive(Clone)]

@@ -1,5 +1,5 @@
 [package]
-name = "rustBackend"
+name = "rust_backend"
 version = "0.0.1"
 description = "try api rest backend in rust"
 edition = "2021"
@@ -7,6 +7,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.89"
 argon2 = "0.5.3"
+async-trait = "0.1.83"
 axum = { version = "0.7.7", features = ["multipart", "macros"] }
 chrono = { version = "0.4.38", features = ["serde"] }
 dotenvy = "0.15.7"
@@ -21,3 +22,6 @@ tower-http = { version = "0.6.1", features = ["trace", "cors"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 uuid = { version = "1.6.1", features = ["v7", "serde"] }
+
+[dev-dependencies]
+httpc-test = "0.1.10"

@@ -1,16 +1,25 @@
+use crate::config::Config;
+use crate::db::new_uuid;
+use crate::error::{AppError, Result};
+use crate::user::mail::send_invitation_mail;
+use crate::user::model::{AuthResponse, AuthUser, Credentials, EmailToken, PendingQuery, RegisterQuery, ResetQuery, ResetResponse, User, UserPendingQueryCache};
+use crate::user::service::{ask_for_reset, generate_email_token, generate_token, hash_password, reset_password, verify_password};
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::SaltString;
 use axum::extract::Path;
 use axum::{Extension, Json};
 use jsonwebtoken::{decode, Validation};
 use sqlx::{query, query_as, PgPool};
+use tracing::log::info;
 
-use crate::config::Config;
-use crate::db::new_uuid;
-use crate::error::{AppError, Result};
-use crate::user::mail::send_invitation_mail;
-use crate::user::model::{AuthResponse, Credentials, EmailToken, PendingQuery, RegisterQuery, User, UserPendingQueryCache};
-use crate::user::service::{generate_email_token, generate_token, hash_password, verify_password};
+pub async fn get_users(
+    Extension(db): Extension<PgPool>,
+    _: AuthUser,
+) -> Result<Json<Vec<AuthUser>>> {
+    let users = query_as!(AuthUser, r#"SELECT id, username, email FROM "user""#)
+        .fetch_all(&db).await?;
+    Ok(Json(users))
+}
 
 pub async fn login(
     Extension(db): Extension<PgPool>,
@@ -32,6 +41,20 @@ pub async fn login(
             generate_token(&config, id, username, u.email)
         })
         .map(|token| Json(AuthResponse { token }))
+}
+
+pub async fn reset(
+    Extension(db): Extension<PgPool>,
+    Extension(config): Extension<Config>,
+    Extension(cache): Extension<UserPendingQueryCache>,
+    Json(q): Json<ResetQuery>,
+) -> Result<Json<ResetResponse>> {
+    let response = match q {
+        ResetQuery::Ask { email } => { ask_for_reset(&db, &config, &cache, email).await? }
+        ResetQuery::Reset { token, password } => { reset_password(&db, &config, &cache, token, password).await? }
+    };
+
+    Ok(Json(response))
 }
 
 pub async fn register(
@@ -64,7 +87,7 @@ pub async fn register(
 
     let pending_invite = generate_email_token(&config, &email)?;
 
-    println!("{}", pending_invite);
+    info!("{}", pending_invite);
 
     cache.insert(email.clone(), PendingQuery::Invite(pending_invite.clone(), q.clone()));
 
@@ -79,19 +102,13 @@ pub async fn confirm(
     Extension(cache): Extension<UserPendingQueryCache>,
     Path(token): Path<String>,
 ) -> Result<Json<AuthResponse>> {
-    println!("tokent = {}", token);
-
     let pending_invite =
         decode::<EmailToken>(&token, &config.auth_keys.decoding, &Validation::default())
             .map_err(|_| AppError::Unauthorized)?;
 
-    println!("pending invite = {:?}", pending_invite);
-
     let pending_query = cache
         .get(&pending_invite.claims.email)
         .ok_or_else(|| AppError::Unauthorized)?;
-
-    println!("pending query = {:?}", pending_query);
 
     match pending_query {
         PendingQuery::Invite(invite_token, query) => {

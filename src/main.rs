@@ -10,11 +10,11 @@ use tower_http::trace;
 use tower_http::trace::TraceLayer;
 use tracing::Level;
 
-use rustBackend::config::Config;
-use rustBackend::db::init_db;
-use rustBackend::error::handle_error;
-use rustBackend::user::model::UserPendingQueryCache;
-use rustBackend::user::user_router;
+use rust_backend::config::Config;
+use rust_backend::db::init_db;
+use rust_backend::error::handle_error;
+use rust_backend::user::model::UserPendingQueryCache;
+use rust_backend::user::user_router;
 
 #[tokio::main]
 async fn main() {
@@ -26,6 +26,7 @@ fn configure_logger() {
     #[cfg(debug_assertions)]
     tracing_subscriber::fmt()
         .with_target(false)
+        .with_max_level(Level::INFO)
         .compact()
         .init();
 

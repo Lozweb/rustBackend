@@ -25,8 +25,19 @@ pub async fn send_invitation_mail(config: &Config, email: &str, token: &str) -> 
             <a href="https://localhost:3000/confirm/{token}">Valider mon adresse email</a><br><br>
         "#
     );
-    println!("mail token = {}", token);
     send_mail(config, "aelozweb@gmail.com", email, "Bienvenue", &body).await?;
+    Ok(())
+}
+
+pub async fn send_reset_mail(config: &Config, email: &str, token: &str) -> Result<()> {
+    let body = format!(
+        r#"
+            Bonjour, modifier votre mot de passe en cliquant sur le lien (valide pendant 2h)
+            <a href="https://jamin.gjini.co/reset?token={token}">Modifier mon mot de passe</a>
+        "#
+    );
+
+    send_mail(config, "aelozweb@gmail.com", email, "Modifier mon mot de passe", &body).await?;
     Ok(())
 }
 

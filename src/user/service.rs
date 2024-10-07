@@ -1,97 +1,120 @@
 use crate::config::Config;
-use crate::error::AppError::BadRequest;
 use crate::error::{AppError, Result};
-use crate::user::mail::send_reset_mail;
-use crate::user::model::{Claims, EmailToken, PendingQuery, ResetResponse, User, UserPendingQueryCache};
+use crate::user::model::{AuthUser, Claims, Credentials, EmailToken, User};
 use anyhow::Error;
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use jsonwebtoken::{decode, encode, Header, Validation};
+use jsonwebtoken::{encode, Header};
 use sqlx::{query, query_as, PgPool};
-use tracing::info;
 use uuid::Uuid;
 
-pub async fn ask_for_reset(
-    db: &PgPool,
-    config: &Config,
-    cache: &UserPendingQueryCache,
-    email: String,
-) -> Result<ResetResponse> {
-    let email = email.trim().to_ascii_lowercase();
+pub async fn users(
+    db: &PgPool
+) -> Result<Vec<AuthUser>> {
+    Ok(query_as!(AuthUser, r#"SELECT id, username, email FROM "user""#).fetch_all(db).await?)
+}
 
-    if email.is_empty() {
-        return Err(BadRequest);
-    }
-    
+pub async fn user_by_username_or_email(
+    db: &PgPool,
+    credentials: &Credentials,
+) -> Result<Option<User>> {
+    let user = query_as!(
+            User,
+            r#"SELECT * FROM "user" WHERE username = $1 OR email = $1"#,
+            credentials.username_or_email.trim().to_ascii_lowercase()
+        )
+        .fetch_optional(db)
+        .await?;
+    Ok(user)
+}
+
+pub async fn user_by_email(
+    db: &PgPool,
+    email: &str,
+) -> Result<Option<User>> {
+    let user = query_as!(User,r#"SELECT * FROM "user" WHERE email = $1"#, email)
+        .fetch_optional(db)
+        .await?;
+    Ok(user)
+}
+
+pub async fn user_email_exist(
+    db: &PgPool,
+    email: &str,
+) -> Result<bool> {
     let count = query!(r#"SELECT COUNT(*) FROM "user" WHERE email = $1"#, email)
         .fetch_one(db)
         .await?
         .count
         .unwrap_or(0);
 
-    if count == 0 {
-        info!("User not exists");
-        return Err(BadRequest);
-    }
-
-    let email_token = generate_email_token(config, &email)?;
-
-    info!("Email token: {}", email_token);
-
-    cache.insert(email.clone(), PendingQuery::Reset(email_token.clone()));
-
-    send_reset_mail(config, &email, &email_token).await?;
-
-    Ok(ResetResponse::EmailSent)
+    Ok(count > 0)
 }
 
-pub async fn reset_password(
+pub async fn username_or_email_exist(
     db: &PgPool,
-    config: &Config,
-    cache: &UserPendingQueryCache,
-    token: String,
-    password: String,
-) -> Result<ResetResponse> {
-    let pending_invite =
-        decode::<EmailToken>(&token, &config.auth_keys.decoding, &Validation::default())
-            .map_err(|_| AppError::Unauthorized)?;
+    username: &str,
+    email: &str,
+) -> Result<bool> {
+    let count = query!(
+            r#"
+                SELECT count(*) FROM "user" WHERE username = $1 OR email = $2
+            "#,
+            username,
+            email
+        )
+        .fetch_one(db)
+        .await?
+        .count
+        .unwrap_or(0);
 
-    let email = &pending_invite.claims.email;
+    Ok(count > 0)
+}
 
-    let pending_query = cache.get(email).ok_or_else(|| AppError::Unauthorized)?;
+pub async fn update_password(
+    db: &PgPool,
+    email: &str,
+    password: &str,
+) -> Result<()> {
+    let salt = SaltString::generate(&mut OsRng);
+    let pass = hash_password(password, &salt)?;
+    query!(
+            r#"
+                UPDATE "user" SET password = $2
+                WHERE email = $1
+            "#,
+            email,
+            pass.to_string()
+        )
+        .execute(db)
+        .await?;
+    Ok(())
+}
 
-    match pending_query {
-        PendingQuery::Reset(invite_token) => {
-            if token != invite_token {
-                return Err(BadRequest);
-            }
-            let salt = SaltString::generate(&mut OsRng);
-            let password = hash_password(&password, &salt)?;
-            query!(
+
+pub async fn add_user(
+    db: &PgPool,
+    id: &Uuid,
+    username: &str,
+    email: &str,
+    password: &str,
+) -> Result<()> {
+    let salt = SaltString::generate(&mut OsRng);
+    let password = hash_password(password, &salt)?;
+    query!(
                 r#"
-                    UPDATE "user" SET password = $2
-                    WHERE email = $1
+                    INSERT INTO "user" (id, username, email, password)
+                    VALUES ($1, $2, $3, $4)
                 "#,
+                id,
+                username,
                 email,
                 password.to_string()
             )
-                .execute(db)
-                .await?;
-
-            query_as!(User,r#"SELECT * FROM "user" WHERE email = $1"#, email)
-                .fetch_optional(db)
-                .await?
-                .ok_or_else(|| AppError::Unauthorized)
-                .and_then(|u| {
-                    let id = u.id.expect("User id is missing");
-                    let username = u.username;
-                    generate_token(config, id, username, u.email)
-                })
-                .map(|token| ResetResponse::Changed { token })
-        }
-        _ => Err(AppError::Unauthorized)
-    }
+        .execute(db)
+        .await?;
+    Ok(())
 }
 
 pub fn generate_email_token(config: &Config, email: &str) -> Result<String> {

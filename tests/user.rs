@@ -126,3 +126,85 @@ async fn get_user_with_none_token_should_fail() -> Result<()> {
     println!("{:#?}", res);
     Ok(())
 }
+
+#[tokio::test]
+async fn ask_reset_password_should_success() -> Result<()> {
+    let client = httpc_test::new_client("http://localhost:3000")?;
+    let res = client.do_post(
+        "/api/user/reset",
+        (r#"
+            {
+              "Ask": {
+                "email": "a6mic48@gmail.com"
+              }
+            }
+        "#, "application/json"),
+    ).await?;
+
+    assert_eq!(res.status(), 200);
+    res.print().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn ask_reset_password_with_unknown_user_should_fail() -> Result<()> {
+    let client = httpc_test::new_client("http://localhost:3000")?;
+    let res = client.do_post(
+        "/api/user/reset",
+        (r#"
+            {
+              "Ask": {
+                "email": "user@example.com"
+              }
+            }
+        "#, "application/json"),
+    ).await?;
+
+    assert_eq!(res.status(), 400);
+    res.print().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn reset_password_confirmation_should_success() -> Result<()> {
+    let client = httpc_test::new_client("http://localhost:3000")?;
+    let res = client.do_post(
+        "/api/user/reset",
+        (r#"
+                {
+                    "Reset": {
+                        "token":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6ImE2bWljNDhAZ21haWwuY29tIiwiZXhwIjoxNzI4MzA5ODM2fQ.yikQYegepX7UR78vMFBSffBL3kAWt_VupxW1NoUCEEE",
+                        "password":"01234"
+                    }
+                }
+        "#, "application/json"),
+    ).await?;
+
+    assert_eq!(res.status(), 200);
+    res.print().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn reset_password_confirmation_with_bad_token_should_fail() -> Result<()> {
+    let client = httpc_test::new_client("http://localhost:3000")?;
+    let res = client.do_post(
+        "/api/user/reset",
+        (r#"
+                {
+                    "Reset": {
+                        "token":"bad_token",
+                        "password":"01234"
+                    }
+                }
+        "#, "application/json"),
+    ).await?;
+
+    assert_eq!(res.status(), 401);
+    res.print().await?;
+
+    Ok(())
+}

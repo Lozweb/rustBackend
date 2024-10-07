@@ -9,6 +9,7 @@ use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use jsonwebtoken::{decode, encode, Header, Validation};
 use sqlx::{query, query_as, PgPool};
+use tracing::info;
 use uuid::Uuid;
 
 pub async fn ask_for_reset(
@@ -18,25 +19,25 @@ pub async fn ask_for_reset(
     email: String,
 ) -> Result<ResetResponse> {
     let email = email.trim().to_ascii_lowercase();
+
     if email.is_empty() {
         return Err(BadRequest);
     }
-    let count = query!(
-        r#"
-            SELECT COUNT(*) FROM "user" WHERE email = $1
-        "#,
-        email
-    )
+    
+    let count = query!(r#"SELECT COUNT(*) FROM "user" WHERE email = $1"#, email)
         .fetch_one(db)
         .await?
         .count
         .unwrap_or(0);
 
-    if count > 0 {
+    if count == 0 {
+        info!("User not exists");
         return Err(BadRequest);
     }
 
     let email_token = generate_email_token(config, &email)?;
+
+    info!("Email token: {}", email_token);
 
     cache.insert(email.clone(), PendingQuery::Reset(email_token.clone()));
 

@@ -1,9 +1,9 @@
 use axum::routing::{get, post};
 use axum::Router;
 
-use crate::user::handler::{confirm, get_users, login, register, reset};
+use crate::user::controller::{confirm, get_users, login, register, reset};
 
-mod handler;
+mod controller;
 pub mod model;
 mod service;
 mod mail;
